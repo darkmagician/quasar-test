@@ -29,6 +29,6 @@ public interface QueryService {
 		 *
 		 * @param result the result
 		 */
-		public void result(int result);
+		public void result(String result);
 	}
 }

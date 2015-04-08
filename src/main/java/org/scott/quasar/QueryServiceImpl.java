@@ -5,6 +5,8 @@ package org.scott.quasar;
 
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map.Entry;
 import java.util.Random;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -32,8 +34,9 @@ public class QueryServiceImpl implements QueryService {
 	
 	/** The period. */
 	private final int period;
-	
-	
+	private final static int processingNum = 1;
+	private final static long interval = 1;
+	final List<Thread> processingList = new LinkedList<Thread>();
 	/**
 	 * @param period
 	 */
@@ -60,8 +63,8 @@ public class QueryServiceImpl implements QueryService {
 	@Override
 	public void query(int id, Callback callback) {
 
-		int i=r.nextInt(period);
-		Long expected=System.currentTimeMillis()+i;
+		int i=r.nextInt(period)+12;
+		Long expected=System.nanoTime()+i;
 		Request request = new Request(id,callback);
 
 		Collection<Request> list = queue.get(expected);
@@ -83,7 +86,7 @@ public class QueryServiceImpl implements QueryService {
 			Entry<Long, Collection<Request>> e = it.next();
 			Collection<Request> requests = e.getValue();
 			for(Request request: requests){
-				int result = request.getId()+100;
+				String result = String.valueOf(request.getId()+100);
 				counter.incrementAndGet();
 				request.getCallback().result(result);
 			}
@@ -94,6 +97,48 @@ public class QueryServiceImpl implements QueryService {
 	}
 		
 	
+	public void stop(){
+		Iterator<Thread> it = processingList.iterator();
+		while(it.hasNext()){
+			Thread t = it.next();
+			t.interrupt();
+			it.remove();
+		}
+		System.out.println("Stop Query Service");
+	}
+	public void start(){
+		System.out.println("Start Query Service");
+		for(int i=0;i<processingNum;i++){
+			Thread t = new Thread(new Runnable(){
+				@Override
+				public void run() {
+					try {
+						long last = 0;
+						while(true){
+							  long start = System.currentTimeMillis();
+							  createProcessingThread(System.nanoTime());
+							  if(start - last > 1000){
+								  System.out.println("size: "+ counter.get());
+								  last = start;
+							  }
+							  if(Thread.interrupted()){
+								  return;
+							  }
+							  long end = System.currentTimeMillis();
+							  long sleep = start+interval-end;
+							  if(sleep>0){
+								 Thread.sleep(sleep);
+							  }
+						  }
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+				}
+			});
+			processingList.add(t);
+			t.start();
+		}
+	}
 	
 	/**
 	 * The Class Request.

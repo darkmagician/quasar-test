@@ -1,0 +1,2 @@
+rem java  -Dco.paralleluniverse.fibers.verifyInstrumentation  -javaagent:target/dependency/quasar-core-0.6.2.jar   -jar target/benchmarks.jar QuasarTester
+java  -javaagent:target/dependency/quasar-core-0.6.2.jar   -jar target/benchmarks.jar QuasarTester
