@@ -3,13 +3,12 @@
  */
 package org.scott.quasar;
 
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
@@ -21,6 +20,7 @@ import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;
+import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
@@ -28,6 +28,8 @@ import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 
 import co.paralleluniverse.fibers.Fiber;
+import co.paralleluniverse.fibers.FiberExecutorScheduler;
+import co.paralleluniverse.fibers.FiberScheduler;
 import co.paralleluniverse.fibers.SuspendExecution;
 
 
@@ -37,17 +39,19 @@ import co.paralleluniverse.fibers.SuspendExecution;
  */
 @SuppressWarnings("serial")
 @BenchmarkMode(Mode.AverageTime)
-@Warmup(iterations = 2, time = 10, timeUnit = TimeUnit.SECONDS)
-@Measurement(iterations = 5, time = 2, timeUnit = TimeUnit.SECONDS)
+@Warmup(iterations = 2, time = 2, timeUnit = TimeUnit.SECONDS)
+@Measurement(iterations = 3, time = 2, timeUnit = TimeUnit.SECONDS)
 @Fork(1)
 @State(Scope.Benchmark)
 public class QuasarTester {
+	@Param({"100", "400"})
 	private int threadSize = 100;
-	private final int taskNum = 100000;
+	private final int taskNum = 5000000;
 	
 	private final QueryServiceImpl service = new QueryServiceImpl(100); 
 	private ExecutorService es ;
-	
+	private ExecutorService es2  ;
+	private FiberScheduler scheduler; //new FiberForkJoinScheduler("Fiber",4);
 
 	
 
@@ -58,10 +62,13 @@ public class QuasarTester {
 
 		service.start();
 		es = new ThreadPoolExecutor(threadSize,threadSize,1000, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
+		es2 = new ThreadPoolExecutor(4,4,1000, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>(100000), new CallerRunsPolicy());
+		scheduler = new FiberExecutorScheduler("Fiber2",es2); 
 	}
 	@TearDown
 	public void teardonw(){
 		 es.shutdown();
+		 es2.shutdown();
 		 service.stop();
 	}
 	
@@ -115,18 +122,18 @@ public class QuasarTester {
 	}
 	
 	
-	//@Benchmark
+	@Benchmark
 	public void fiberQuery() throws SuspendExecution, InterruptedException, ExecutionException{
-		final Lock lock2 = new co.paralleluniverse.strands.concurrent.ReentrantLock();
+		final Lock lock2 = new ReentrantLock();
 		final Condition signal2 = lock2.newCondition();
 		final AtomicInteger completed= new AtomicInteger();
+		final AtomicInteger started= new AtomicInteger();
 		  final Random r = new Random();
 		  
 		  
-		final List<Fiber<Void>>  flist = new LinkedList<Fiber<Void>>();
 		for(int i=0;i<taskNum;i++){
 			final int k = r.nextInt(100000);
-			flist.add(new Fiber<Void>(){
+			new Fiber<Void>(scheduler){
 
 				/* (non-Javadoc)
 				 * @see co.paralleluniverse.fibers.Fiber#run()
@@ -134,6 +141,7 @@ public class QuasarTester {
 				@Override
 				protected Void run() throws SuspendExecution,
 						InterruptedException {
+					started.incrementAndGet();
 					  String result = new FiberAsyncCallback() {
 						    protected void requestAsync() {
 						    	service.query(k, this);
@@ -143,25 +151,22 @@ public class QuasarTester {
 						System.out.println("fiber Empty result");
 					}	 
 					int current = completed.incrementAndGet();
-/*					if(taskNum == current){
+					if(taskNum == current){
 						try {
 							lock2.lock();
 							signal2.signal();
 						}finally{
 							lock2.unlock();
 						}
-					}*/
+					}
 					return null;
 				}
 				
-			}.start());
-
+			}.start();
 		}
-		for(Fiber<Void> f:flist){
-			f.join();
-		}
-/*		try {
+		try {
 			lock2.lock();
+
 			if(completed.get()==taskNum){
 				return;
 			}
@@ -170,7 +175,7 @@ public class QuasarTester {
 			e.printStackTrace();
 		}finally{
 			lock2.unlock();
-		}*/
+		}
 	}
 	
 }

@@ -1,2 +1,2 @@
 rem java  -Dco.paralleluniverse.fibers.verifyInstrumentation  -javaagent:target/dependency/quasar-core-0.6.2.jar   -jar target/benchmarks.jar QuasarTester
-java  -javaagent:target/dependency/quasar-core-0.6.2.jar   -jar target/benchmarks.jar QuasarTester
+java  -server -Xms1536m -Xmx1536m -XX:NewSize=512m -XX:MaxNewSize=512m -XX:PermSize=64m  -XX:MaxPermSize=64m -XX:-UseConcMarkSweepGC -XX:+UseCMSCompactAtFullCollection  -XX:CMSInitiatingOccupancyFraction=80 -XX:+CMSParallelRemarkEnabled  -javaagent:target/dependency/quasar-core-0.6.2.jar   -jar target/benchmarks.jar QuasarTester

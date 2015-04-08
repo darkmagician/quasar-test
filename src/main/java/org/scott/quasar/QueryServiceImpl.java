@@ -3,13 +3,11 @@
  */
 package org.scott.quasar;
 
-import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Random;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -24,7 +22,7 @@ public class QueryServiceImpl implements QueryService {
 	
 	
 	/** The queue. */
-	private final ConcurrentNavigableMap<Long, Collection<Request>> queue = new ConcurrentSkipListMap<Long, Collection<Request>>();
+	private final ConcurrentNavigableMap<Long, Request> queue = new ConcurrentSkipListMap<Long, Request>();
 	
 	/** The r. */
 	private final Random r = new Random();
@@ -50,7 +48,7 @@ public class QueryServiceImpl implements QueryService {
 	}
 	
 	public void startMonitor(){
-		counter.set(0);
+		counter.set(0); 
 	}
 	
 	public void stopMonitor(){
@@ -67,29 +65,28 @@ public class QueryServiceImpl implements QueryService {
 		Long expected=System.nanoTime()+i;
 		Request request = new Request(id,callback);
 
-		Collection<Request> list = queue.get(expected);
-		if(list == null){
-			list = new ConcurrentLinkedQueue<Request>();
-			Collection<Request>  existing = queue.putIfAbsent(expected, list);
-			if(existing != null){
-				list = existing;
+		Request existing = queue.get(expected);
+		if(existing == null){
+			if(null == queue.putIfAbsent(expected, request)){
+				return;
 			}
 		}
-		list.add(request);
+		String result = String.valueOf(request.getId()+100);
+		counter.incrementAndGet();
+		request.getCallback().result(result);
 	}
 	
 	
-	public void createProcessingThread(long now){
-		ConcurrentNavigableMap<Long, Collection<Request>> olders = queue.headMap(now);
-		Iterator<Entry<Long, Collection<Request>>> it = olders.entrySet().iterator();
+	public void createProcessingThread(){
+		long now = System.nanoTime();
+		ConcurrentNavigableMap<Long, Request> olders = queue.headMap(now);
+		Iterator<Entry<Long, Request>> it = olders.entrySet().iterator();
 		while(it.hasNext()){
-			Entry<Long, Collection<Request>> e = it.next();
-			Collection<Request> requests = e.getValue();
-			for(Request request: requests){
-				String result = String.valueOf(request.getId()+100);
-				counter.incrementAndGet();
-				request.getCallback().result(result);
-			}
+			Entry<Long, Request> e = it.next();
+			Request request = e.getValue();
+			String result = String.valueOf(request.getId()+100);
+			counter.incrementAndGet();
+			request.getCallback().result(result);
 			it.remove();
 		}
 				
@@ -104,30 +101,29 @@ public class QueryServiceImpl implements QueryService {
 			t.interrupt();
 			it.remove();
 		}
-		System.out.println("Stop Query Service");
+		//System.out.println("Stop Query Service");
 	}
 	public void start(){
-		System.out.println("Start Query Service");
+		//System.out.println("Start Query Service");
 		for(int i=0;i<processingNum;i++){
 			Thread t = new Thread(new Runnable(){
 				@Override
 				public void run() {
 					try {
-						long last = 0;
 						while(true){
 							  long start = System.currentTimeMillis();
-							  createProcessingThread(System.nanoTime());
-							  if(start - last > 1000){
-								  System.out.println("size: "+ counter.get());
-								  last = start;
-							  }
+							  createProcessingThread();
 							  if(Thread.interrupted()){
 								  return;
 							  }
 							  long end = System.currentTimeMillis();
 							  long sleep = start+interval-end;
 							  if(sleep>0){
-								 Thread.sleep(sleep);
+								 try {
+									Thread.sleep(sleep);
+								} catch (Exception e) {
+									return;
+								}
 							  }
 						  }
 					} catch (Exception e) {

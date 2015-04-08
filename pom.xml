@@ -112,7 +112,8 @@
 					</execution>
 				</executions>
 			</plugin>
-			<!-- <plugin>
+			
+			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-antrun-plugin</artifactId>
 				<version>1.8</version>
@@ -137,7 +138,7 @@
 						</goals>
 					</execution>
 				</executions>
-			</plugin> -->
+			</plugin> 
 		</plugins>
 		<pluginManagement>
 			<plugins>
